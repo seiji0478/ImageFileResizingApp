@@ -3,10 +3,189 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:local="clr-namespace:ImageFileResizingApp"
+        materialDesign:ColorZoneAssist.Mode="PrimaryDark"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="720" Width="1280" Background="GhostWhite">
     <Grid>
+        <DockPanel>
+            <!--  メニューパネル -->
+            <StackPanel
+                DockPanel.Dock="Top"
+                Orientation="Horizontal"
+                Margin="20, 0, 0, 0">
+                <Button 
+                    x:Name="LoadImagesButton"
+                    Content="+"
+                    Click="LoadImages_Click"
+                    Margin="5"
+                    Width="30"
+                    Height="30"
+                    Background="White"
+                    BorderBrush="Gray"
+                    BorderThickness="1"
+                    Cursor="Hand">
+                    <!-- 画像読込みボタン -->
+                    <Button.Template>
+                        <ControlTemplate 
+                            TargetType="Button">
+                            <Border 
+                                x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="20">
+                                <ContentPresenter 
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger 
+                                    Property="IsMouseOver" 
+                                    Value="True">
+                                    <Setter 
+                                        TargetName="border" 
+                                        Property="Background" 
+                                        Value="#FFDDDDDD"/>
+                                </Trigger>
+                                <Trigger 
+                                    Property="IsPressed" 
+                                    Value="True">
+                                    <Setter 
+                                        TargetName="border" 
+                                        Property="Background" 
+                                        Value="#FFBBBBBB"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <!-- 最適化パネル -->
+                <StackPanel
+                    Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Margin="10,0,0,0"
+                        Text="最適化: "/>
+                    <CheckBox
+                        x:Name="OptimizeCheckBox"
+                        VerticalAlignment="Center"
+                        Margin="0,0,0,0"
+                        Checked="OptimizeCheckBox_Checked"
+                        Unchecked="OptimizeCheckBox_Unchecked"/>
+                </StackPanel>
+                <!-- 品質パネル -->
+                <StackPanel
+                    Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Margin="19,0,0,0"
+                        Text="品質: "/>
+                    <CheckBox
+                        x:Name="ImgQualityCheckBox"
+                        VerticalAlignment="Center"
+                        Margin="0,0,0,0"
+                        Checked="ImgQualityCheckBox_Checked"
+                        Unchecked="ImgQualityCheckBox_Unchecked"/>
+                    <xctk:IntegerUpDown
+                        x:Name="ImgQualityUpDown"
+                        VerticalAlignment="Center"
+                        Margin="10,0,0,0"
+                        Width="60"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="100"/>
+                </StackPanel>
+                <!-- 横幅パネル -->
+                <StackPanel
+                    Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Margin="10,0,0,0"
+                        Text="横幅 (px): "/>
+                    <xctk:IntegerUpDown
+                        x:Name="ResizeWidthUpDown"
+                        VerticalAlignment="Center"
+                        Margin="0,0,0,0"
+                        Width="60"
+                        Minimum="0"
+                        Maximum="10000"
+                        Value="0"
+                        ValueChanged="UpDown_ValueChanged"/>
+                </StackPanel>
+                <!-- 高さパネル -->
+                <StackPanel
+                    Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Margin="10,0,0,0"
+                        Text="高さ (px): "/>
+                    <xctk:IntegerUpDown
+                        x:Name="ResizeHeightUpDown"
+                        VerticalAlignment="Center"
+                        Margin="5,0,0,0"
+                        Width="60"
+                        Minimum="0"
+                        Maximum="10000"
+                        Value="0"
+                        ValueChanged="UpDown_ValueChanged"/>
+                </StackPanel>
+                <!-- ファイル名入力パネル -->
+                <StackPanel
+                        Orientation="Horizontal">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Margin="10,0,0,0"
+                        Text="ファイル名(接頭辞): "/>
+                    <TextBox
+                        x:Name="FileNameTextBox"
+                        VerticalAlignment="Center"
+                        Margin="5,0,0,0"
+                        Width="80"
+                        Height="20"
+                        Text=""/>
+                </StackPanel>
+            </StackPanel>
+            <!-- 画像表示エリア -->
+            <ScrollViewer
+                x:Name="ImageScrollViewer"
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Auto">
+                <Canvas 
+                    x:Name="ImageCanvas"
+                    Width="1200"
+                    Height="600"
+                    Background="GhostWhite"/>
+            </ScrollViewer>
+        </DockPanel>
+        <!-- クリア・実行ボタン -->
+        <StackPanel
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Orientation="Horizontal">
+            <Button
+                Content="クリア"
+                Width="120"
+                Height="40"
+                Margin="0, 0, 0, 20"
+                Click="ClearButton_Click"
+                Background="White"
+                BorderBrush="Gray"
+                BorderThickness="1"
+                Cursor="Hand"/>
+            <Button
+                Content="実行"
+                Width="120"
+                Height="40"
+                Margin="20, 0, 20, 20"
+                Click="ExecuteButton_Click"
+                Background="White"
+                BorderBrush="Gray"
+                BorderThickness="1"
+                Cursor="Hand"/>
+        </StackPanel>
 
     </Grid>
 </Window>
