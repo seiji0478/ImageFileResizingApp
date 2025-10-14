@@ -186,6 +186,5 @@
                 BorderThickness="1"
                 Cursor="Hand"/>
         </StackPanel>
-
     </Grid>
 </Window>

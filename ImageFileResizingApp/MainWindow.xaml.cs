@@ -1,4 +1,7 @@
-﻿using Microsoft.Win32;
+﻿using ImageFileResizingApp.Common;
+using ImageFileResizingApp.Models;
+using ImageFileResizingApp.Views;
+using Microsoft.Win32;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,9 +10,6 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
-using ImageFileResizingApp.Common;
-using ImageFileResizingApp.Models;
-using ImageFileResizingApp.Views;
 using Image = System.Windows.Controls.Image;
 
 namespace ImageFileResizingApp
@@ -30,20 +30,20 @@ namespace ImageFileResizingApp
         /// <summary>
         /// メンバーフィールド
         /// </summary>
-        private double currentX = 10;                                           // Current position of X
-        private double currentY = 10;                                           // Current position of Y
-        private const double imageSpacing = 40;                                 // Image spacing
-        private const double imageWidth = 240;                                  // Image width
-        private const double imageHeight = 135;                                 // Image width
-        private HashSet<string> loadImgPathList = new HashSet<string>();        // List for image paths
-        private HashSet<ImageData> imageDataList = new HashSet<ImageData>();    // List for image data
+        private double currentX = 10;                                           // 現在のX座標
+        private double currentY = 10;                                           // 現在のY座標
+        private const double imageSpacing = 30;                                 // 間隔
+        private const double imageWidth = 240;                                  // 画像幅
+        private const double imageHeight = 135;                                 // 画像高さ
+        private HashSet<ImageData> imageDataList = new HashSet<ImageData>();    // 画像データリスト
+        private HashSet<Grid> imgContainerList = new HashSet<Grid>();           // 画像コンテナーリスト
 
         /// <summary>
         /// 画像読込みボタン
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void LoadImages_Click(object sender, RoutedEventArgs e)
+        private async void LoadImages_Click(object sender, RoutedEventArgs e)
         {
             // 画像読込みダイアログ
             OpenFileDialog openFileDialog = new OpenFileDialog
@@ -54,10 +54,34 @@ namespace ImageFileResizingApp
 
             if (openFileDialog.ShowDialog() == true)
             {
-                foreach (var file in openFileDialog.FileNames)
+                // 選択されたファイル数
+                int totalFiles = openFileDialog.FileNames.Length;
+
+                // ProgressWindow生成/表示
+                ProgressWindow progressWindow = new ProgressWindow
+                { 
+                    Owner = this,
+                };
+                progressWindow.Show();
+
+                await Task.Run(() =>
                 {
-                    AddImageToCanvas(file);
-                }
+                    int processCount = 0;
+                    foreach (var file in openFileDialog.FileNames)
+                    {
+                        Dispatcher.Invoke(() => AddImageToCanvas(file));
+                        processCount++;
+                        double progressValue = (double)processCount / totalFiles * 100;
+                        Dispatcher.Invoke(() => progressWindow.UpdateProgress(progressValue));
+                        Thread.Sleep(100);
+
+                        if (processCount == totalFiles)
+                        {
+                            Dispatcher.Invoke(() => progressWindow.Close());
+                        }
+                    }
+                });
+                MessageBox.Show("画像を読み込みました。", CommonDef.MSG_BOX_CAPTION_QUESTION);
             }
         }
 
@@ -73,15 +97,12 @@ namespace ImageFileResizingApp
                 return;
             };
 
-            if (loadImgPathList.Contains(filePath))
+            if (imageDataList.Any(img => img.FilePath == filePath))
             {
                 MessageBox.Show("このファイルは既に読込み済みです。", CommonDef.MSG_BOX_CAPTION_ERROR);
                 return;
-            };
-
-            // 画像パスリスト
-            loadImgPathList.Add(filePath);
-
+            }
+            
             // 画像生成
             BitmapImage bitmap = new BitmapImage(new Uri(filePath));
 
@@ -247,21 +268,24 @@ namespace ImageFileResizingApp
                 Padding = new Thickness(0),
                 Cursor = Cursors.Hand,
             };
+            closeButton .Click += CloseButton_Click;
 
             // コンテナー
-            Grid container = new Grid
+            Grid imgContainer = new Grid
             {
                 Width = imageWidth + 20,
                 Height = 250,
                 Margin = new Thickness(10),
+                Tag = filePath
             };
-            container.Children.Add(stackPanel);
-            container.Children.Add(closeButton);
+            imgContainer.Children.Add(stackPanel);
+            imgContainer.Children.Add(closeButton);
+            imgContainerList.Add(imgContainer);
 
             // キャンバス追加
-            Canvas.SetLeft(container, currentX);
-            Canvas.SetTop(container, currentY);
-            ImageCanvas.Children.Add(container);
+            Canvas.SetLeft(imgContainer, currentX);
+            Canvas.SetTop(imgContainer, currentY);
+            ImageCanvas.Children.Add(imgContainer);
 
             // 座標調整
             currentX += imageWidth + imageSpacing;
@@ -300,11 +324,32 @@ namespace ImageFileResizingApp
         /// <param name="e"></param>
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Parent is StackPanel stackPanel 
-                && stackPanel.Children[0] is Image img && img.Tag is string filePath)
+            if (sender is Button btn 
+                && btn.Parent is Grid container
+                && container.Children[0] is StackPanel panel
+                && panel.Children[0] is Image img 
+                && img.Tag is string filePath)
             {
-                ImageCanvas.Children.Remove(stackPanel);
-                loadImgPathList.Remove(filePath);
+                double test = Canvas.GetLeft(container);
+                double test2 = Canvas.GetTop(container);
+                imageDataList.RemoveWhere(data => data.FilePath == filePath);
+                imgContainerList.RemoveWhere(data => data.Tag as string == filePath);
+                ImageCanvas.Children.Clear();
+                currentX = 10;
+                currentY = 10;
+                foreach (var imgContainer in imgContainerList)
+                {
+                    Canvas.SetLeft(imgContainer, currentX);
+                    Canvas.SetTop(imgContainer, currentY);
+                    ImageCanvas.Children.Add(imgContainer);
+                    currentX += imageWidth + imageSpacing;
+                    if (currentX + imageWidth > ImageScrollViewer.ViewportWidth
+                        && ImageScrollViewer.ViewportWidth > 0)
+                    {
+                        currentX = 10;
+                        currentY += 300;
+                    }
+                }   
             }
         }
 
@@ -338,7 +383,8 @@ namespace ImageFileResizingApp
                 if (resizeByWidth)
                 {
                     // 幅指定リサイズ
-                    int calHeight = (int)Math.Round((double)resizeWidthUpDownVal * imgData.Height / imgData.Width);
+                    
+                    int calHeight = CommonFunc.CalculateResizeValue(resizeWidthUpDownVal, imgData.Height, imgData.Width);
                     imgData.FileInfoTextBlock.Text = "";
                     imgData.FileInfoTextBlock.Text = string.Format(
                         CommonDef.FILE_INFO_FORMAT_2,
@@ -354,7 +400,7 @@ namespace ImageFileResizingApp
                 else if (resizeByHeight)
                 {
                     // 高さ指定リサイズ
-                    int calWidth = (int)Math.Round((double)resizeHeightUpDownVal * imgData.Width / imgData.Height);
+                    int calWidth = CommonFunc.CalculateResizeValue(resizeHeightUpDownVal, imgData.Width, imgData.Height);
                     imgData.FileInfoTextBlock.Text = "";
                     imgData.FileInfoTextBlock.Text = string.Format(
                         CommonDef.FILE_INFO_FORMAT_2,
@@ -435,7 +481,7 @@ namespace ImageFileResizingApp
         private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
             ImageCanvas.Children.Clear();
-            loadImgPathList.Clear();
+            imageDataList.Clear();
             currentX = 10;
             currentY = 10;
             ImageCanvas.Height = ImageScrollViewer.ViewportHeight;
@@ -447,10 +493,16 @@ namespace ImageFileResizingApp
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void  ExecuteButton_Click(object sender, RoutedEventArgs e)
+        private async void ExecuteButton_Click(object sender, RoutedEventArgs e)
         {
             // 保存フォルダパス
             string saveFolderPath = CommonDef.DIRECTORY_PATH_SAVE;
+
+            if (imageDataList.Count == 0)
+            {
+                MessageBox.Show("対象の画像がありません。", CommonDef.MSG_BOX_CAPTION_ERROR);
+                return;
+            }
 
             if (Directory.Exists(saveFolderPath))
             {
@@ -472,76 +524,99 @@ namespace ImageFileResizingApp
             }
             Directory.CreateDirectory(saveFolderPath);
 
-            int imgCnt = 1;
-            foreach (var imgData in imageDataList)
+            // ProgressWindow生成/表示
+            ProgressWindow progressWindow = new ProgressWindow
             {
-                string extension = Path.GetExtension(imgData.FileName);         // 拡張子
-                bool isJpeg = CommonDef.JPEG_EXTENSIONS.Contains(extension);    // JPEGフラグ
-                string baseName = !string.IsNullOrEmpty(FileNameTextBox.Text)   // ファイル名の指定又は元のファイル名
-                    ? FileNameTextBox.Text + "_" + (imgCnt++) + extension
-                    : imgData.FileName;
-                string resizeFileSavePath = saveFolderPath + "\\";              // リサイズファイル保存先
-                string processingFileSavePath = saveFolderPath + "\\";          // 品質変更・最適化ファイル保存先
+                Owner = this,
+            };
+            progressWindow.Show();
 
-                // ファイル名決定（共通化）
-                if (ImgQualityCheckBox.IsChecked == true || OptimizeCheckBox.IsChecked == true)
+            await Task.Run(() =>
+            {
+                int totalFiles = imageDataList.Count;
+                int imgCnt = 1;
+                int processCount = 0;
+                foreach (var imgData in imageDataList)
                 {
-                    resizeFileSavePath += (!string.IsNullOrEmpty(FileNameTextBox.Text) ?
-                        imgData.FileName : "resizeed_" + imgData.FileName);
-                    processingFileSavePath += baseName;
-                }
-                else
-                {
-                    resizeFileSavePath += baseName;
-                }
+                    Dispatcher.Invoke(() => {
+                        string extension = Path.GetExtension(imgData.FileName);         // 拡張子
+                        bool isJpeg = CommonDef.JPEG_EXTENSIONS.Contains(extension);    // JPEGフラグ
+                        string baseName = !string.IsNullOrEmpty(FileNameTextBox.Text)   // ファイル名の指定又は元のファイル名
+                            ? FileNameTextBox.Text + "_" + (imgCnt++) + extension
+                            : imgData.FileName;
+                        string resizeFileSavePath = saveFolderPath + "\\";              // リサイズファイル保存先
+                        string processingFileSavePath = saveFolderPath + "\\";          // 品質変更・最適化ファイル保存先
 
-                // BitmapImage インスタンス生成（リサイズ指定がある場合は設定）
-                BitmapImage bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(imgData.FilePath);
-                bitmap.DecodePixelWidth = imgData.ResizedWidth ?? imgData.Width;
-                bitmap.DecodePixelHeight = imgData.ResizedHeight ?? imgData.Height;
-                bitmap.EndInit();
+                        // ファイル名決定（共通化）
+                        if (ImgQualityCheckBox.IsChecked == true || OptimizeCheckBox.IsChecked == true)
+                        {
+                            resizeFileSavePath += (!string.IsNullOrEmpty(FileNameTextBox.Text) ?
+                                imgData.FileName : "resizeed_" + imgData.FileName);
+                            processingFileSavePath += baseName;
+                        }
+                        else
+                        {
+                            resizeFileSavePath += baseName;
+                        }
 
-                // Bitmap エンコーダー生成・保存
-                BitmapEncoder encoder;
-                encoder = isJpeg ? new JpegBitmapEncoder() : new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                using (var stream = new FileStream(resizeFileSavePath, FileMode.Create))
-                {
-                    encoder.Save(stream);
-                }
+                        // BitmapImage インスタンス生成（リサイズ指定がある場合は設定）
+                        BitmapImage bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.UriSource = new Uri(imgData.FilePath);
+                        bitmap.DecodePixelWidth = imgData.ResizedWidth ?? imgData.Width;
+                        bitmap.DecodePixelHeight = imgData.ResizedHeight ?? imgData.Height;
+                        bitmap.EndInit();
 
-                if (isJpeg)
-                {
-                    if (OptimizeCheckBox.IsChecked == true)
+                        // Bitmap エンコーダー生成・保存
+                        BitmapEncoder encoder;
+                        encoder = isJpeg ? new JpegBitmapEncoder() : new PngBitmapEncoder();
+                        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                        using (var stream = new FileStream(resizeFileSavePath, FileMode.Create))
+                        {
+                            encoder.Save(stream);
+                        }
+
+                        if (isJpeg)
+                        {
+                            if (OptimizeCheckBox.IsChecked == true)
+                            {
+                                // 最適化
+                                string args = String.Format(
+                                    CommonDef.CJPEG_ARGUMENT_OPTIMIZE,
+                                    processingFileSavePath,
+                                    resizeFileSavePath
+                                    );
+                                CommonFunc.JsonOptimize(args);
+                                File.Delete(resizeFileSavePath);
+                            }
+                            else if (ImgQualityCheckBox.IsChecked == true)
+                            {
+                                // 品質変更
+                                int imgQuality = ImgQualityUpDown.Value ?? 100;
+                                string args = String.Format(
+                                    CommonDef.CJPEG_ARGUMENT_QUALITY_CHANGE,
+                                    imgQuality,
+                                    processingFileSavePath,
+                                    resizeFileSavePath
+                                    );
+                                CommonFunc.JsonQualityChange(args);
+                                File.Delete(resizeFileSavePath);
+                            }
+                        }
+
+                    });
+                    processCount++;
+                    double progressValue = (double)processCount / totalFiles * 100;
+                    Dispatcher.Invoke(() => progressWindow.UpdateProgress(progressValue));
+                    Thread.Sleep(100);
+
+                    if (processCount == totalFiles)
                     {
-                        // 最適化
-                        string args = String.Format(
-                            CommonDef.CJPEG_ARGUMENT_OPTIMIZE,
-                            processingFileSavePath,
-                            resizeFileSavePath
-                            );
-                        CommonFunc.JsonOptimize(args);
-                        File.Delete(resizeFileSavePath);
-                    }
-                    else if (ImgQualityCheckBox.IsChecked == true)
-                    {
-                        // 品質変更
-                        int imgQuality = ImgQualityUpDown.Value ?? 100;
-                        string args = String.Format(
-                            CommonDef.CJPEG_ARGUMENT_QUALITY_CHANGE,
-                            imgQuality,
-                            processingFileSavePath,
-                            resizeFileSavePath
-                            );
-                        CommonFunc.JsonQualityChange(args);
-                        File.Delete(resizeFileSavePath);
+                        Dispatcher.Invoke(() => progressWindow.Close());
                     }
                 }
-
-                MessageBox.Show("処理が完了しました。", "完了"
-            }
+            });
+            MessageBox.Show("画像処理が終了しました。", CommonDef.MSG_BOX_CAPTION_QUESTION);
         }
     }
 }
