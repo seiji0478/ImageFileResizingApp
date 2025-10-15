@@ -54,8 +54,8 @@ namespace ImageFileResizingApp
 
             if (openFileDialog.ShowDialog() == true)
             {
-                // 選択されたファイル数
-                int totalFiles = openFileDialog.FileNames.Length;
+                int totalFiles = openFileDialog.FileNames.Length;   // 選択されたファイル数
+                List<bool> results = new List<bool>();              // 処理結果リスト
 
                 // ProgressWindow生成/表示
                 ProgressWindow progressWindow = new ProgressWindow
@@ -69,7 +69,7 @@ namespace ImageFileResizingApp
                     int processCount = 0;
                     foreach (var file in openFileDialog.FileNames)
                     {
-                        Dispatcher.Invoke(() => AddImageToCanvas(file));
+                        Dispatcher.Invoke(() => results.Add(AddImageToCanvas(file)));
                         processCount++;
                         double progressValue = (double)processCount / totalFiles * 100;
                         Dispatcher.Invoke(() => progressWindow.UpdateProgress(progressValue));
@@ -81,7 +81,8 @@ namespace ImageFileResizingApp
                         }
                     }
                 });
-                MessageBox.Show("画像を読み込みました。", CommonDef.MSG_BOX_CAPTION_QUESTION);
+
+                if (results.Any(f => f)) MessageBox.Show("画像を読み込みました。", CommonDef.MSG_BOX_CAPTION_QUESTION);
             }
         }
 
@@ -89,18 +90,18 @@ namespace ImageFileResizingApp
         /// 画像追加
         /// </summary>
         /// <param name="filePath"></param>
-        private void AddImageToCanvas(string filePath)
+        private bool AddImageToCanvas(string filePath)
         {
             if (!File.Exists(filePath))
             {
                 MessageBox.Show("ファイルが存在しません。", CommonDef.MSG_BOX_CAPTION_ERROR);
-                return;
+                return false;
             };
 
             if (imageDataList.Any(img => img.FilePath == filePath))
             {
                 MessageBox.Show("このファイルは既に読込み済みです。", CommonDef.MSG_BOX_CAPTION_ERROR);
-                return;
+                return false;
             }
             
             // 画像生成
@@ -301,6 +302,8 @@ namespace ImageFileResizingApp
             double neededWidth = currentX + imageWidth + 20;
             ImageCanvas.Height = Math.Max(ImageCanvas.Height, neededHeight);
             ImageCanvas.Width = Math.Max(ImageCanvas.Width, neededWidth);
+
+            return true;
         }
 
         /// <summary>
@@ -496,7 +499,10 @@ namespace ImageFileResizingApp
         private async void ExecuteButton_Click(object sender, RoutedEventArgs e)
         {
             // 保存フォルダパス
-            string saveFolderPath = CommonDef.DIRECTORY_PATH_SAVE;
+            string saveFolderPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                CommonDef.SAVE_DIRECTORY
+                );
 
             if (imageDataList.Count == 0)
             {
@@ -616,7 +622,10 @@ namespace ImageFileResizingApp
                     }
                 }
             });
-            MessageBox.Show("画像処理が終了しました。", CommonDef.MSG_BOX_CAPTION_QUESTION);
+            MessageBox.Show(
+                $"画像処理が終了しました。保存先は下記のパスです。\n{saveFolderPath}",
+                CommonDef.MSG_BOX_CAPTION_QUESTION
+                );
         }
     }
 }

@@ -6,7 +6,7 @@ namespace ImageFileResizingApp.Common
         // ---------------------------------
         // 各種パス
         // ---------------------------------
-        public const string DIRECTORY_PATH_SAVE = @"C:\Users\nishi\Downloads\ResizedImages";
+        public const string SAVE_DIRECTORY = @"Downloads\ResizedImages";
 
         // ---------------------------------
         // 各種外部ツール実行ファイル
